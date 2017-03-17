@@ -16,7 +16,9 @@ limitations under the License.
 #ifndef TENSORFLOW_KERNELS_DEBUG_OP_H_
 #define TENSORFLOW_KERNELS_DEBUG_OP_H_
 
+#if GOOGLE_CUDA
 #include "tensorflow/core/common_runtime/gpu/gpu_util.h"
+#endif
 #include "tensorflow/core/debug/debug_io_utils.h"
 #include "tensorflow/core/framework/device_base.h"
 #include "tensorflow/core/framework/op_kernel.h"
@@ -92,9 +94,11 @@ class DebugIdentityOp : public OpKernel {
 
   void Compute(OpKernelContext* context) override {
     if (!debug_urls_.empty()) {
+      // TODO(b/32704451): Don't just ignore the ::tensorflow::Status object!
       DebugIO::PublishDebugTensor(tensor_name_, "DebugIdentity",
                                   context->input(0),
-                                  Env::Default()->NowMicros(), debug_urls_);
+                                  Env::Default()->NowMicros(), debug_urls_)
+          .IgnoreError();
     }
 
     context->set_output(0, context->input(0));
@@ -142,8 +146,10 @@ class DebugNanCountOp : public OpKernel {
     output_tensor->vec<int64>()(0) = nan_count;
 
     if (!debug_urls_.empty()) {
+      // TODO(b/32704451): Don't just ignore the ::tensorflow::Status object!
       DebugIO::PublishDebugTensor(tensor_name_, "DebugNanCount", *output_tensor,
-                                  Env::Default()->NowMicros(), debug_urls_);
+                                  Env::Default()->NowMicros(), debug_urls_)
+          .IgnoreError();
     }
   }
 
@@ -254,9 +260,11 @@ class DebugNumericSummaryOp : public OpKernel {
     output_tensor->vec<double>()(11) = variance;
 
     if (!debug_urls_.empty()) {
+      // TODO(b/32704451): Don't just ignore the ::tensorflow::Status object!
       DebugIO::PublishDebugTensor(tensor_name_, "DebugNumericSummary",
                                   *output_tensor, Env::Default()->NowMicros(),
-                                  debug_urls_);
+                                  debug_urls_)
+          .IgnoreError();
     }
   }
 

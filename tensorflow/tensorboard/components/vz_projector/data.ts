@@ -14,6 +14,7 @@ limitations under the License.
 ==============================================================================*/
 
 import {TSNE} from './bh_tsne';
+import { ANN } from './ann';
 import {SpriteMetadata} from './data-provider';
 import * as knn from './knn';
 import * as logging from './logging';
@@ -325,13 +326,19 @@ export class DataSet {
     } else {
       let sampledData = sampledIndices.map(i => this.points[i]);
       this.nearestK = k;
-      knnComputation = KNN_GPU_ENABLED ?
+      let ann = new ANN(sampledData, 70);
+      ann.trees(50, 50);
+      ann.reduce();
+      knnComputation = ann.test();
+ /*     knnComputation = KNN_GPU_ENABLED ?
           knn.findKNNGPUCosine(sampledData, k, (d => d.vector)) :
           knn.findKNN(
               sampledData, k, (d => d.vector),
-              (a, b, limit) => vector.cosDistNorm(a, b));
+              (a, b, limit) => vector.cosDistNorm(a, b));*/
     }
+
     knnComputation.then(nearest => {
+      console.log(nearest);
       this.nearest = nearest;
       util.runAsyncTask('Initializing T-SNE...', () => {
             this.tsne.initDataDist(this.nearest);

@@ -18442,7 +18442,7 @@ var ANN = (function () {
             this.localNeighborhood = [];
             this.recurse(indices);
             this.mergeNeighbors();
-            console.log('tree: ' + i);
+            this.progress = i / n_trees;
         }
     };
     ANN.prototype.reduce = function () {
@@ -18456,6 +18456,7 @@ var ANN = (function () {
                 var d = vector.dist2(x_i, this.data[neighborhood[j]].vector);
                 kMin.add(d, { index: neighborhood[j], dist: d });
             }
+            this.progress = i / this.N;
             this.knns[i] = kMin.getMinKItems();
         }
     };
@@ -18483,13 +18484,13 @@ var ANN = (function () {
                 while (!positionHeap.isEmpty()) {
                     var nextOne = positionHeap.minKey();
                     if (nextOne != lastOne && nextOne != i) {
-                        console.log(nextOne);
                         var d = vector.dist2(x_i, this.data[nextOne].vector);
                         nodeHeap.add(d, { index: nextOne, dist: d });
                         lastOne = nextOne;
                     }
                     this.advanceHeap(positionHeap, positionVector);
                 }
+                this.progress = (i + T * this.N) / (this.N * maxIter);
                 this.knns[i] = nodeHeap.getMinKItems();
             }
         }
@@ -18520,14 +18521,22 @@ var ANN = (function () {
     };
     ANN.prototype.run = function () {
         var _this = this;
-        return util_1.runAsyncTask('Finding nearest neighbors...', function () {
+        var Msg = 'Finding nearest neighbors';
+        var progressMsg = Msg;
+        return util_1.runAsyncTask(progressMsg, function () {
+            console.time("RP");
             console.time("ANN");
-            _this.trees(10, 50);
+            _this.progress = 0;
+            progressMsg = Msg + ' - Building trees: ' + (_this.progress * 100).toFixed() + '%';
+            _this.trees(50, 50);
+            _this.progress = 0;
+            progressMsg = Msg + ' - Reduce Neighbors' + (_this.progress * 100).toFixed() + '%';
             _this.reduce();
-            console.timeEnd("ANN");
-            console.log(_this.knns);
+            console.timeEnd("RP");
+            _this.progress = 0;
+            progressMsg = Msg + ' - Explore Neighborhood' + (_this.progress * 100).toFixed() + '%';
             _this.exploreNeighborhood(1);
-            console.log(_this.knns);
+            console.timeEnd("ANN");
             return _this.knns;
         });
     };

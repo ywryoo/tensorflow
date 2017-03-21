@@ -131,6 +131,7 @@ export class ANN {
 	N: number;
 	threshold: number = 0;
 	threshold2: number = 0;
+	progress: number;
 
 	constructor(data: DataPoint[], K:number) {
 		this.data = data;
@@ -265,7 +266,7 @@ export class ANN {
 			this.localNeighborhood = [];
 			this.recurse(indices);
 			this.mergeNeighbors();
-			console.log('tree: ' + i)
+			this.progress = i/n_trees;
 		}
 
 	}
@@ -282,6 +283,7 @@ export class ANN {
 				const d = vector.dist2(x_i, this.data[neighborhood[j]].vector);
 				kMin.add(d, {index: neighborhood[j], dist: d});
 			}
+			this.progress = i/this.N;
 			this.knns[i] = kMin.getMinKItems();
 		}
 	}
@@ -317,6 +319,7 @@ export class ANN {
 				}
 				this.advanceHeap(positionHeap, positionVector);
 			}
+			this.progress = (i+T*this.N)/(this.N*maxIter);
 			this.knns[i] = nodeHeap.getMinKItems();
 			}
 		}
@@ -353,14 +356,22 @@ export class ANN {
 	}
 
 	public run(): Promise<NearestEntry[][]> {
-		return runAsyncTask<NearestEntry[][]>('Finding nearest neighbors...', () => {
+		const Msg = 'Finding nearest neighbors';
+		let progressMsg = Msg;
+		return runAsyncTask<NearestEntry[][]>(progressMsg, () => {
+			console.time("RP");
 			console.time("ANN");
+			this.progress = 0;
+			progressMsg = Msg + ' - Building trees: ' + (this.progress * 100).toFixed() + '%';
 			this.trees(50, 50);
+			this.progress = 0;
+			progressMsg = Msg + ' - Reduce Neighbors' + (this.progress * 100).toFixed() + '%';
 			this.reduce();
+			console.timeEnd("RP"); 
+			this.progress = 0;
+			progressMsg = Msg + ' - Explore Neighborhood' + (this.progress * 100).toFixed() + '%';
+			this.exploreNeighborhood(1);
 			console.timeEnd("ANN"); 
-
-			//this.exploreNeighborhood(1);
-
 			return this.knns;
 		});
 	}

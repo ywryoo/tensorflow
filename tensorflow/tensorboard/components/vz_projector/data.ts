@@ -118,7 +118,7 @@ export class DataSet {
   hasTSNERun: boolean = false;
   spriteAndMetadataInfo: SpriteAndMetadataInfo;
   fracVariancesExplained: number[];
-
+  ann: any;
   private tsne: TSNE;
 
   /** Creates a new Dataset */
@@ -326,10 +326,10 @@ export class DataSet {
     } else {
       let sampledData = sampledIndices.map(i => this.points[i]);
       this.nearestK = k;
-      let ann = new ANN(sampledData, 70);
-      ann.trees(50, 50);
-      ann.reduce();
-      knnComputation = ann.test();
+      this.ann = new ANN(sampledData, 70);
+      this.ann.trees(50, 50);
+      console.log(this.ann.reduce());
+      knnComputation = this.ann.test();
  /*     knnComputation = KNN_GPU_ENABLED ?
           knn.findKNNGPUCosine(sampledData, k, (d => d.vector)) :
           knn.findKNN(
@@ -398,9 +398,10 @@ export class DataSet {
   findNeighbors(pointIndex: number, distFunc: DistanceFunction, numNN: number):
       knn.NearestEntry[] {
     // Find the nearest neighbors of a particular point.
-    let neighbors = knn.findKNNofPoint(
-        this.points, pointIndex, numNN, (d => d.vector), distFunc);
+    //let neighbors = knn.findKNNofPoint(
+    //    this.points, pointIndex, numNN, (d => d.vector), distFunc);
     // TODO(smilkov): Figure out why we slice.
+    let neighbors = this.nearest[pointIndex];
     let result = neighbors.slice(0, numNN);
     return result;
   }

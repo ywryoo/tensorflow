@@ -18296,26 +18296,26 @@ var ANN = (function () {
                 var neighboriterator = 0;
                 var it3 = 0;
                 while (neighboriterator < tmp.length && it3 < indicesEnd) {
-                    var newone = neighboriterator;
-                    if (newone < it3) {
+                    var newone = indices[neighboriterator];
+                    if (newone < indices[it3]) {
                         ++neighboriterator;
                     }
-                    else if (it3 < newone) {
+                    else if (indices[it3] < newone) {
                         if (indices[it3] === cur) {
                             ++it3;
                             continue;
                         }
-                        newone = it3;
+                        newone = indices[it3];
                         ++it3;
                     }
                     else {
                         ++neighboriterator;
                         ++it3;
                     }
-                    this.treeNeighborhoods[cur].push(indices[newone]);
+                    this.treeNeighborhoods[cur].push(newone);
                 }
                 this.treeNeighborhoods[cur].concat(tmp.slice(neighboriterator));
-                for (var i = 0; i < indicesEnd; i++) {
+                for (var i = it3; i < indicesEnd; i++) {
                     if (indices[i] !== cur) {
                         this.treeNeighborhoods[cur].push(indices[i]);
                     }
@@ -18375,7 +18375,7 @@ var ANN = (function () {
             var kMin = new heap_1.KMin(this.K);
             for (var j = 0; j < neighborhood.length; ++j) {
                 var d = vector.dist2(x_i, this.data[neighborhood[j]].vector);
-                kMin.add(d, { index: j, dist: d });
+                kMin.add(d, { index: neighborhood[j], dist: d });
             }
             this.knns[i] = kMin.getMinKItems();
         }
@@ -19416,7 +19416,6 @@ limitations under the License.
 "use strict";
 var bh_tsne_1 = require('./bh_tsne');
 var ann_1 = require('./ann');
-var knn = require('./knn');
 var logging = require('./logging');
 var util = require('./util');
 var vector = require('./vector');
@@ -19639,10 +19638,10 @@ var DataSet = (function () {
         else {
             var sampledData = sampledIndices.map(function (i) { return _this.points[i]; });
             this.nearestK = k;
-            var ann = new ann_1.ANN(sampledData, 70);
-            ann.trees(50, 50);
-            ann.reduce();
-            knnComputation = ann.test();
+            this.ann = new ann_1.ANN(sampledData, 70);
+            this.ann.trees(50, 50);
+            console.log(this.ann.reduce());
+            knnComputation = this.ann.test();
         }
         knnComputation.then(function (nearest) {
             console.log(nearest);
@@ -19696,8 +19695,10 @@ var DataSet = (function () {
      */
     DataSet.prototype.findNeighbors = function (pointIndex, distFunc, numNN) {
         // Find the nearest neighbors of a particular point.
-        var neighbors = knn.findKNNofPoint(this.points, pointIndex, numNN, (function (d) { return d.vector; }), distFunc);
+        //let neighbors = knn.findKNNofPoint(
+        //    this.points, pointIndex, numNN, (d => d.vector), distFunc);
         // TODO(smilkov): Figure out why we slice.
+        var neighbors = this.nearest[pointIndex];
         var result = neighbors.slice(0, numNN);
         return result;
     };
@@ -19789,7 +19790,7 @@ function stateGetAccessorDimensions(state) {
 }
 exports.stateGetAccessorDimensions = stateGetAccessorDimensions;
 
-},{"./ann":2,"./bh_tsne":3,"./knn":11,"./logging":13,"./util":25,"./vector":26}],9:[function(require,module,exports){
+},{"./ann":2,"./bh_tsne":3,"./logging":13,"./util":25,"./vector":26}],9:[function(require,module,exports){
 
 },{}],10:[function(require,module,exports){
 /* Copyright 2016 The TensorFlow Authors. All Rights Reserved.

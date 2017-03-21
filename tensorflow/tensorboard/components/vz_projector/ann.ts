@@ -104,24 +104,24 @@ export class ANN {
 				let neighboriterator = 0;
 				let it3 = 0;
 				while(neighboriterator < tmp.length && it3 < indicesEnd) {
-					let newone = neighboriterator;
-					if(newone < it3) {
+					let newone = indices[neighboriterator];
+					if(newone < indices[it3]) {
 						++neighboriterator;
-					} else if (it3 < newone) {
+					} else if (indices[it3] < newone) {
 						if(indices[it3] === cur) {
 							++it3;
 							continue;
 						}
-						newone = it3;
+						newone = indices[it3];
 						++it3;
 					} else {
 						++neighboriterator;
 						++it3;
 					}
-					this.treeNeighborhoods[cur].push(indices[newone]);
+					this.treeNeighborhoods[cur].push(newone);
 				}
 				this.treeNeighborhoods[cur].concat(tmp.slice(neighboriterator));
-				for(let i = 0; i < indicesEnd; i++) {
+				for(let i = it3; i < indicesEnd; i++) {
 					if(indices[i] !== cur) {
 						this.treeNeighborhoods[cur].push(indices[i]);
 					}
@@ -165,14 +165,14 @@ export class ANN {
 		this.threshold2 = newThreshold * 4;
 		let indices = [];
 		for(let i = 0; i< this.data.length ; i++) {
-		indices.push(i);
+			indices.push(i);
 		}
 
 		for(let i = 0; i < n_trees; i++) {
-		this.localNeighborhood = [];
-		this.recurse(indices);
-		this.mergeNeighbors();
-		console.log('tree: ' + i)
+			this.localNeighborhood = [];
+			this.recurse(indices);
+			this.mergeNeighbors();
+			console.log('tree: ' + i)
 		}
 
 	}
@@ -187,7 +187,7 @@ export class ANN {
 			let kMin = new KMin<NearestEntry>(this.K);
 			for(let j = 0; j < neighborhood.length; ++j) {
 				const d = vector.dist2(x_i, this.data[neighborhood[j]].vector);
-				kMin.add(d, {index: j, dist: d});
+				kMin.add(d, {index: neighborhood[j], dist: d});
 			}
 			this.knns[i] = kMin.getMinKItems();
 		}

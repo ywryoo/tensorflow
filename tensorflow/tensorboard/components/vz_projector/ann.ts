@@ -357,23 +357,28 @@ export class ANN {
 
 	public run(): Promise<NearestEntry[][]> {
 		const Msg = 'Finding nearest neighbors';
-		let progressMsg = Msg;
-		return runAsyncTask<NearestEntry[][]>(progressMsg, () => {
+		let progressMsg = Msg + ' - Building trees..';
+		return runAsyncTask<void>(progressMsg, () => {
 			console.time("RP");
 			console.time("ANN");
-			this.progress = 0;
-			progressMsg = Msg + ' - Building trees: ' + (this.progress * 100).toFixed() + '%';
 			this.trees(50, 50);
-			this.progress = 0;
-			progressMsg = Msg + ' - Reduce Neighbors' + (this.progress * 100).toFixed() + '%';
-			this.reduce();
-			console.timeEnd("RP"); 
-			this.progress = 0;
-			progressMsg = Msg + ' - Explore Neighborhood' + (this.progress * 100).toFixed() + '%';
-			this.exploreNeighborhood(1);
-			console.timeEnd("ANN"); 
-			return this.knns;
-		});
+			return;
+		}).then(() => {
+			progressMsg = Msg + ' - Reducing Neighbors..';
+			runAsyncTask<void>(progressMsg, () => {
+				this.reduce();
+				console.timeEnd("RP"); 
+				return;
+			})
+		}).then(() => {
+			return runAsyncTask<NearestEntry[][]>(progressMsg, () => {
+				progressMsg = Msg + ' - Exploring Neighborhood..';
+				//this.exploreNeighborhood(1);
+				console.timeEnd("ANN"); 
+				return this.knns;
+			});
+		})
+
 	}
 
 }

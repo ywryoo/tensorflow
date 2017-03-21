@@ -18522,22 +18522,26 @@ var ANN = (function () {
     ANN.prototype.run = function () {
         var _this = this;
         var Msg = 'Finding nearest neighbors';
-        var progressMsg = Msg;
+        var progressMsg = Msg + ' - Building trees..';
         return util_1.runAsyncTask(progressMsg, function () {
             console.time("RP");
             console.time("ANN");
-            _this.progress = 0;
-            progressMsg = Msg + ' - Building trees: ' + (_this.progress * 100).toFixed() + '%';
             _this.trees(50, 50);
-            _this.progress = 0;
-            progressMsg = Msg + ' - Reduce Neighbors' + (_this.progress * 100).toFixed() + '%';
-            _this.reduce();
-            console.timeEnd("RP");
-            _this.progress = 0;
-            progressMsg = Msg + ' - Explore Neighborhood' + (_this.progress * 100).toFixed() + '%';
-            _this.exploreNeighborhood(1);
-            console.timeEnd("ANN");
-            return _this.knns;
+            return;
+        }).then(function () {
+            progressMsg = Msg + ' - Reducing Neighbors..';
+            util_1.runAsyncTask(progressMsg, function () {
+                _this.reduce();
+                console.timeEnd("RP");
+                return;
+            });
+        }).then(function () {
+            return util_1.runAsyncTask(progressMsg, function () {
+                progressMsg = Msg + ' - Exploring Neighborhood..';
+                //this.exploreNeighborhood(1);
+                console.timeEnd("ANN");
+                return _this.knns;
+            });
         });
     };
     return ANN;

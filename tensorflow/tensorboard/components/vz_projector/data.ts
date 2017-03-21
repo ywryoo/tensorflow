@@ -119,6 +119,7 @@ export class DataSet {
   spriteAndMetadataInfo: SpriteAndMetadataInfo;
   fracVariancesExplained: number[];
   ann: any;
+  sampledIndices: number[];
   private tsne: TSNE;
 
   /** Creates a new Dataset */
@@ -294,7 +295,7 @@ export class DataSet {
     this.tSNEShouldStop = false;
     this.tSNEIteration = 0;
 
-    let sampledIndices = this.shuffledDataIndices.slice(0, TSNE_SAMPLE_SIZE);
+    this.sampledIndices = this.shuffledDataIndices.slice(0, TSNE_SAMPLE_SIZE);
     let step = () => {
       if (this.tSNEShouldStop) {
         stepCallback(null);
@@ -303,7 +304,7 @@ export class DataSet {
       }
       this.tsne.step();
       let result = this.tsne.getSolution();
-      sampledIndices.forEach((index, i) => {
+      this.sampledIndices.forEach((index, i) => {
         let dataPoint = this.points[index];
 
         dataPoint.projections['tsne-0'] = result[i * tsneDim + 0];
@@ -324,12 +325,12 @@ export class DataSet {
       // We found the nearest neighbors before and will reuse them.
       knnComputation = Promise.resolve(this.nearest);
     } else {
-      let sampledData = sampledIndices.map(i => this.points[i]);
+      let sampledData = this.sampledIndices.map(i => this.points[i]);
       this.nearestK = k;
+
       this.ann = new ANN(sampledData, 70);
-      this.ann.trees(50, 50);
-      console.log(this.ann.reduce());
-      knnComputation = this.ann.test();
+      knnComputation = this.ann.run();
+      
  /*     knnComputation = KNN_GPU_ENABLED ?
           knn.findKNNGPUCosine(sampledData, k, (d => d.vector)) :
           knn.findKNN(
@@ -401,7 +402,7 @@ export class DataSet {
     //let neighbors = knn.findKNNofPoint(
     //    this.points, pointIndex, numNN, (d => d.vector), distFunc);
     // TODO(smilkov): Figure out why we slice.
-    let neighbors = this.nearest[pointIndex];
+    let neighbors = this.nearest[this.sampledIndices.indexOf(pointIndex)];
     let result = neighbors.slice(0, numNN);
     return result;
   }

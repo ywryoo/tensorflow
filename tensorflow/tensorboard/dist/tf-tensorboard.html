@@ -18217,17 +18217,96 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-Refactored code from LargeVis: https://github.com/elbamos/largeVis
+Refactored code from: https://github.com/elbamos/largeVis
 ==============================================================================*/
 "use strict";
 var vector = require('./vector');
 var heap_1 = require('./heap');
+var util_1 = require('./util');
 var Position = (function () {
-    function Position(matrix, column) {
+    function Position(knn, i) {
+        this.knn = knn;
+        this.first = 0;
+        this.i = i;
     }
+    Position.prototype.advance = function () {
+        this.first = this.first + 1;
+        return (this.first >= this.knn[this.i].length - 1) ? -1 : this.knn[this.i][this.first].index;
+    };
+    Position.prototype.get = function () {
+        return this.knn[this.i][this.first].index;
+    };
     return Position;
 }());
 exports.Position = Position;
+var MinIndexedPQ = (function () {
+    function MinIndexedPQ(NMAX) {
+        var nn = NMAX + 1;
+        this.N = 0;
+        this.heap = new Array(nn);
+        this.index = new Array(nn);
+        this.keys = new Array(nn);
+        for (var i = 0; i < nn; i++) {
+            this.index[i] = -1;
+        }
+    }
+    MinIndexedPQ.prototype.swap = function (i, j) {
+        var tmp = this.heap[i];
+        this.heap[i] = this.heap[j];
+        this.heap[j] = tmp;
+        this.index[this.heap[i]] = i;
+        this.index[this.heap[j]] = j;
+    };
+    MinIndexedPQ.prototype.bubbleUp = function (k) {
+        while (k > 1 && this.keys[this.heap[Math.floor(k / 2)]] > this.keys[this.heap[k]]) {
+            this.swap(k, Math.floor[k / 2]);
+            k = Math.floor(k / 2);
+        }
+    };
+    MinIndexedPQ.prototype.bubbleDown = function (k) {
+        while (2 * k <= this.N) {
+            var j = 2 * k;
+            if (j < this.N && this.keys[this.heap[j]] > this.keys[this.heap[j + 1]])
+                j++;
+            if (this.keys[this.heap[k]] <= this.keys[this.heap[j]])
+                break;
+            this.swap(k, j);
+            k = j;
+        }
+    };
+    MinIndexedPQ.prototype.isEmpty = function () {
+        return this.N == 0;
+    };
+    MinIndexedPQ.prototype.insert = function (i, key) {
+        this.N = this.N + 1;
+        this.index[i] = this.N;
+        this.heap[this.N] = i;
+        this.keys[i] = key;
+        this.bubbleUp(this.N);
+    };
+    MinIndexedPQ.prototype.minIndex = function () {
+        return this.heap[1];
+    };
+    MinIndexedPQ.prototype.minKey = function () {
+        return this.keys[this.heap[1]];
+    };
+    MinIndexedPQ.prototype.pop = function () {
+        var min = this.heap[1];
+        this.N = this.N - 1;
+        this.swap(1, this.N);
+        this.bubbleDown(1);
+        this.index[min] = -1;
+        this.heap[this.N + 1] = -1;
+        return min;
+    };
+    MinIndexedPQ.prototype.rotate = function (key) {
+        var i = this.heap[1];
+        this.keys[i] = key;
+        this.bubbleDown(this.index[i]);
+    };
+    return MinIndexedPQ;
+}());
+exports.MinIndexedPQ = MinIndexedPQ;
 /**
  * Compute KNN using Random Projection Trees
  */
@@ -18293,10 +18372,11 @@ var ANN = (function () {
             for (var it2 = 0; it2 < indicesEnd; ++it2) {
                 var cur = indices[it2];
                 tmp = this.treeNeighborhoods[cur].slice();
+                this.treeNeighborhoods[cur] = [];
                 var neighboriterator = 0;
                 var it3 = 0;
                 while (neighboriterator < tmp.length && it3 < indicesEnd) {
-                    var newone = indices[neighboriterator];
+                    var newone = tmp[neighboriterator];
                     if (newone < indices[it3]) {
                         ++neighboriterator;
                     }
@@ -18342,12 +18422,11 @@ var ANN = (function () {
             }
             return direction;
         }
-        var v = d.slice();
-        vector.unit(v);
+        vector.unit(d);
         for (var i = 0; i < I; i++) {
             var I2 = indices[i];
             var X = this.data[I2].vector;
-            direction[i] = vector.dot(vector.sub(X, m), v);
+            direction[i] = vector.dot(vector.sub(X, m), d);
         }
         return direction;
     };
@@ -18379,20 +18458,54 @@ var ANN = (function () {
             }
             this.knns[i] = kMin.getMinKItems();
         }
-        return this.knns;
     };
     ANN.prototype.exploreNeighborhood = function (maxIter) {
         this.K = this.knns[0].length;
-        var old_knns = [];
+        var old_knns;
         for (var T = 0; T < maxIter; ++T) {
-            old_knns = this.knns;
-            var nodeHeap = [];
-            var positionHeap = [];
+            old_knns = this.knns.slice();
+            var nodeHeap = new heap_1.KMin(this.K);
+            var positionHeap = new MinIndexedPQ(this.K + 1);
             var positionVector = [];
             for (var i = 0; i < this.N; ++i) {
                 var x_i = this.data[i].vector;
+                positionVector.push(new Position(this.knns, i));
+                positionHeap.insert(0, old_knns[i][0].index);
+                var posVecCnt = 1;
+                var oldEnd = old_knns[i].length;
+                for (var it_2 = 0; it_2 < oldEnd; it_2++) {
+                    positionVector.push(new Position(this.knns, it_2));
+                    var id = this.knns[i][positionVector[positionVector.length - 1].first].index;
+                    positionHeap.insert(posVecCnt, id);
+                    posVecCnt = posVecCnt + 1;
+                }
+                var lastOne = -1;
+                while (!positionHeap.isEmpty()) {
+                    var nextOne = positionHeap.minKey();
+                    if (nextOne != lastOne && nextOne != i) {
+                        console.log(nextOne);
+                        var d = vector.dist2(x_i, this.data[nextOne].vector);
+                        nodeHeap.add(d, { index: nextOne, dist: d });
+                        lastOne = nextOne;
+                    }
+                    this.advanceHeap(positionHeap, positionVector);
+                }
+                this.knns[i] = nodeHeap.getMinKItems();
             }
         }
+    };
+    ANN.prototype.advanceHeap = function (positionHeap, positionVector) {
+        var whichColumn = positionHeap.minIndex();
+        var adv = positionVector[whichColumn].advance();
+        if (adv == -1) {
+            positionHeap.pop();
+        }
+        else {
+            positionHeap.rotate(adv);
+        }
+    };
+    ANN.prototype.addHeap = function (heap, x_i, j) {
+        var d = vector.dist2(x_i, this.data[j].vector);
     };
     ANN.prototype.sortAndReturn = function () {
         for (var i = 0; i < this.N; ++i) {
@@ -18405,15 +18518,24 @@ var ANN = (function () {
         }
         return this.knns;
     };
-    ANN.prototype.test = function () {
+    ANN.prototype.run = function () {
         var _this = this;
-        return new Promise(function (resolve) { return resolve(_this.knns); });
+        return util_1.runAsyncTask('Finding nearest neighbors...', function () {
+            console.time("ANN");
+            _this.trees(10, 50);
+            _this.reduce();
+            console.timeEnd("ANN");
+            console.log(_this.knns);
+            _this.exploreNeighborhood(1);
+            console.log(_this.knns);
+            return _this.knns;
+        });
     };
     return ANN;
 }());
 exports.ANN = ANN;
 
-},{"./heap":10,"./vector":26}],3:[function(require,module,exports){
+},{"./heap":10,"./util":25,"./vector":26}],3:[function(require,module,exports){
 /* Copyright 2016 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -19608,7 +19730,7 @@ var DataSet = (function () {
         this.tsne = new bh_tsne_1.TSNE(opt);
         this.tSNEShouldStop = false;
         this.tSNEIteration = 0;
-        var sampledIndices = this.shuffledDataIndices.slice(0, exports.TSNE_SAMPLE_SIZE);
+        this.sampledIndices = this.shuffledDataIndices.slice(0, exports.TSNE_SAMPLE_SIZE);
         var step = function () {
             if (_this.tSNEShouldStop) {
                 stepCallback(null);
@@ -19617,7 +19739,7 @@ var DataSet = (function () {
             }
             _this.tsne.step();
             var result = _this.tsne.getSolution();
-            sampledIndices.forEach(function (index, i) {
+            _this.sampledIndices.forEach(function (index, i) {
                 var dataPoint = _this.points[index];
                 dataPoint.projections['tsne-0'] = result[i * tsneDim + 0];
                 dataPoint.projections['tsne-1'] = result[i * tsneDim + 1];
@@ -19636,12 +19758,10 @@ var DataSet = (function () {
             knnComputation = Promise.resolve(this.nearest);
         }
         else {
-            var sampledData = sampledIndices.map(function (i) { return _this.points[i]; });
+            var sampledData = this.sampledIndices.map(function (i) { return _this.points[i]; });
             this.nearestK = k;
             this.ann = new ann_1.ANN(sampledData, 70);
-            this.ann.trees(50, 50);
-            console.log(this.ann.reduce());
-            knnComputation = this.ann.test();
+            knnComputation = this.ann.run();
         }
         knnComputation.then(function (nearest) {
             console.log(nearest);
@@ -19698,7 +19818,7 @@ var DataSet = (function () {
         //let neighbors = knn.findKNNofPoint(
         //    this.points, pointIndex, numNN, (d => d.vector), distFunc);
         // TODO(smilkov): Figure out why we slice.
-        var neighbors = this.nearest[pointIndex];
+        var neighbors = this.nearest[this.sampledIndices.indexOf(pointIndex)];
         var result = neighbors.slice(0, numNN);
         return result;
     };

@@ -12,11 +12,7 @@ mat  B  = randu<mat>(5,5);
 
 cout << A << endl;
 
-uvec q1 = find(A > B);
-uvec q2 = find(A > 0.5);
-uvec q3 = find(A > 0.5, 3, "last");
-
-cout << q2 << endl;
+cout << A(0, 2) << endl;
 
 // change elements of A greater than 0.5 to 1
 A.elem( find(A > 0.5) ).ones();	

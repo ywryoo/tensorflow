@@ -266,7 +266,6 @@ export class ANN {
 			this.localNeighborhood = [];
 			this.recurse(indices);
 			this.mergeNeighbors();
-			this.progress = i/n_trees;
 		}
 
 	}
@@ -283,28 +282,27 @@ export class ANN {
 				const d = vector.dist2(x_i, this.data[neighborhood[j]].vector);
 				kMin.add(d, {index: neighborhood[j], dist: d});
 			}
-			this.progress = i/this.N;
+
 			this.knns[i] = kMin.getMinKItems();
 		}
 	}
 
 	public exploreNeighborhood(maxIter: number): void {
-	this.K = this.knns[0].length;
 	let old_knns: NearestEntry[][];
 	for(let T = 0; T < maxIter; ++T) {
-		old_knns = this.knns.slice();
+		old_knns = this.knns;
 		let nodeHeap = new KMin<NearestEntry>(this.K);
 		let positionHeap: MinIndexedPQ = new MinIndexedPQ(this.K + 1);
 		let positionVector:Position[] = [];
 		for(let i = 0; i < this.N; ++i) {
 			const x_i = this.data[i].vector;
-			positionVector.push(new Position(this.knns, i));
+			positionVector.push(new Position(old_knns, i));
 			positionHeap.insert(0, old_knns[i][0].index);
 			let posVecCnt: number = 1;
 			let oldEnd = old_knns[i].length;
 			for(let it = 0; it < oldEnd; it++) {
-				positionVector.push(new Position(this.knns, it));
-				let id: number = this.knns[i][positionVector[positionVector.length-1].first].index;
+				positionVector.push(new Position(old_knns, old_knns[i][it].index));
+				let id: number = old_knns[i][positionVector[positionVector.length-1].first].index;
 				positionHeap.insert(posVecCnt, id);
 				posVecCnt = posVecCnt + 1;
 			}
@@ -319,7 +317,6 @@ export class ANN {
 				}
 				this.advanceHeap(positionHeap, positionVector);
 			}
-			this.progress = (i+T*this.N)/(this.N*maxIter);
 			this.knns[i] = nodeHeap.getMinKItems();
 			}
 		}

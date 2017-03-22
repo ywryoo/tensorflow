@@ -18442,7 +18442,6 @@ var ANN = (function () {
             this.localNeighborhood = [];
             this.recurse(indices);
             this.mergeNeighbors();
-            this.progress = i / n_trees;
         }
     };
     ANN.prototype.reduce = function () {
@@ -18456,27 +18455,25 @@ var ANN = (function () {
                 var d = vector.dist2(x_i, this.data[neighborhood[j]].vector);
                 kMin.add(d, { index: neighborhood[j], dist: d });
             }
-            this.progress = i / this.N;
             this.knns[i] = kMin.getMinKItems();
         }
     };
     ANN.prototype.exploreNeighborhood = function (maxIter) {
-        this.K = this.knns[0].length;
         var old_knns;
         for (var T = 0; T < maxIter; ++T) {
-            old_knns = this.knns.slice();
+            old_knns = this.knns;
             var nodeHeap = new heap_1.KMin(this.K);
             var positionHeap = new MinIndexedPQ(this.K + 1);
             var positionVector = [];
             for (var i = 0; i < this.N; ++i) {
                 var x_i = this.data[i].vector;
-                positionVector.push(new Position(this.knns, i));
+                positionVector.push(new Position(old_knns, i));
                 positionHeap.insert(0, old_knns[i][0].index);
                 var posVecCnt = 1;
                 var oldEnd = old_knns[i].length;
                 for (var it_2 = 0; it_2 < oldEnd; it_2++) {
-                    positionVector.push(new Position(this.knns, it_2));
-                    var id = this.knns[i][positionVector[positionVector.length - 1].first].index;
+                    positionVector.push(new Position(old_knns, old_knns[i][it_2].index));
+                    var id = old_knns[i][positionVector[positionVector.length - 1].first].index;
                     positionHeap.insert(posVecCnt, id);
                     posVecCnt = posVecCnt + 1;
                 }
@@ -18490,7 +18487,6 @@ var ANN = (function () {
                     }
                     this.advanceHeap(positionHeap, positionVector);
                 }
-                this.progress = (i + T * this.N) / (this.N * maxIter);
                 this.knns[i] = nodeHeap.getMinKItems();
             }
         }

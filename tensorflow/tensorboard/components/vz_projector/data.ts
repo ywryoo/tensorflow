@@ -384,6 +384,7 @@ export class DataSet {
     this.tSNEShouldStop = true;
   }
 
+
   /**
    * Finds the nearest neighbors of the query point using a
    * user-specified distance metric.

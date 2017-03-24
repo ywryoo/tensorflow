@@ -18231,7 +18231,7 @@ var Position = (function () {
     }
     Position.prototype.advance = function () {
         this.first = this.first + 1;
-        return (this.first >= this.knn[this.i].length - 1) ? -1 : this.knn[this.i][this.first].index;
+        return (this.first >= this.knn[this.i].length) ? -1 : this.knn[this.i][this.first].index;
     };
     Position.prototype.get = function () {
         return this.knn[this.i][this.first].index;
@@ -18264,18 +18264,19 @@ var MinIndexedPQ = (function () {
         }
     };
     MinIndexedPQ.prototype.bubbleDown = function (k) {
-        while (2 * k <= this.N) {
-            var j = 2 * k;
+        var kk = k;
+        while (2 * kk <= this.N) {
+            var j = 2 * kk;
             if (j < this.N && this.keys[this.heap[j]] > this.keys[this.heap[j + 1]])
                 j++;
-            if (this.keys[this.heap[k]] <= this.keys[this.heap[j]])
+            if (this.keys[this.heap[kk]] <= this.keys[this.heap[j]])
                 break;
-            this.swap(k, j);
-            k = j;
+            this.swap(kk, j);
+            kk = j;
         }
     };
     MinIndexedPQ.prototype.isEmpty = function () {
-        return this.N == 0;
+        return this.N === 0;
     };
     MinIndexedPQ.prototype.insert = function (i, key) {
         this.N = this.N + 1;
@@ -18292,8 +18293,8 @@ var MinIndexedPQ = (function () {
     };
     MinIndexedPQ.prototype.pop = function () {
         var min = this.heap[1];
-        this.N = this.N - 1;
         this.swap(1, this.N);
+        this.N = this.N - 1;
         this.bubbleDown(1);
         this.index[min] = -1;
         this.heap[this.N + 1] = -1;
@@ -18460,41 +18461,43 @@ var ANN = (function () {
     };
     ANN.prototype.exploreNeighborhood = function (maxIter) {
         var old_knns;
-        for (var T = 0; T < maxIter; ++T) {
-            old_knns = this.knns;
-            var nodeHeap = new heap_1.KMin(this.K);
-            var positionHeap = new MinIndexedPQ(this.K + 1);
-            var positionVector = [];
-            for (var i = 0; i < this.N; ++i) {
-                var x_i = this.data[i].vector;
-                positionVector.push(new Position(old_knns, i));
-                positionHeap.insert(0, old_knns[i][0].index);
-                var posVecCnt = 1;
-                var oldEnd = old_knns[i].length;
-                for (var it_2 = 0; it_2 < oldEnd; it_2++) {
-                    positionVector.push(new Position(old_knns, old_knns[i][it_2].index));
-                    var id = old_knns[i][positionVector[positionVector.length - 1].first].index;
-                    positionHeap.insert(posVecCnt, id);
-                    posVecCnt = posVecCnt + 1;
-                }
-                var lastOne = -1;
-                while (!positionHeap.isEmpty()) {
-                    var nextOne = positionHeap.minKey();
-                    if (nextOne != lastOne && nextOne != i) {
-                        var d = vector.dist2(x_i, this.data[nextOne].vector);
-                        nodeHeap.add(d, { index: nextOne, dist: d });
-                        lastOne = nextOne;
+        for (var T = 0; T < maxIter; T++) {
+            old_knns = this.knns.slice();
+            for (var i = 0; i < this.N; i++) {
+                if (old_knns[i].length !== 0) {
+                    var nodeHeap = new heap_1.KMin(this.K);
+                    var positionHeap = new MinIndexedPQ(this.K + 1);
+                    var positionVector = [];
+                    var x_i = this.data[i].vector;
+                    positionVector.push(new Position(old_knns, i));
+                    positionHeap.insert(0, old_knns[i][0].index);
+                    var posVecCnt = 1;
+                    var oldEnd = old_knns[i].length;
+                    for (var it_2 = 0; it_2 < oldEnd; it_2++) {
+                        positionVector.push(new Position(old_knns, old_knns[i][it_2].index));
+                        var id = positionVector[positionVector.length - 1].get();
+                        positionHeap.insert(posVecCnt, id);
+                        posVecCnt = posVecCnt + 1;
                     }
-                    this.advanceHeap(positionHeap, positionVector);
+                    var lastOne = -1;
+                    while (!positionHeap.isEmpty()) {
+                        var nextOne = positionHeap.minKey();
+                        if (nextOne !== lastOne && nextOne !== i) {
+                            var d = vector.dist2(x_i, this.data[nextOne].vector);
+                            nodeHeap.add(d, { index: nextOne, dist: d });
+                            lastOne = nextOne;
+                        }
+                        this.advanceHeap(positionHeap, positionVector);
+                    }
+                    this.knns[i] = nodeHeap.getMinKItems();
                 }
-                this.knns[i] = nodeHeap.getMinKItems();
             }
         }
     };
     ANN.prototype.advanceHeap = function (positionHeap, positionVector) {
         var whichColumn = positionHeap.minIndex();
         var adv = positionVector[whichColumn].advance();
-        if (adv == -1) {
+        if (adv === -1) {
             positionHeap.pop();
         }
         else {
@@ -18518,25 +18521,25 @@ var ANN = (function () {
     ANN.prototype.run = function () {
         var _this = this;
         var Msg = 'Finding nearest neighbors';
-        var progressMsg = Msg + ' - Building trees..';
-        return util_1.runAsyncTask(progressMsg, function () {
-            console.time("RP");
-            console.time("ANN");
-            _this.trees(50, 50);
-            return;
-        }).then(function () {
-            progressMsg = Msg + ' - Reducing Neighbors..';
+        return new Promise(function (resolve) {
+            var progressMsg = Msg + ' - Building trees..';
             util_1.runAsyncTask(progressMsg, function () {
-                _this.reduce();
-                console.timeEnd("RP");
-                return;
-            });
-        }).then(function () {
-            return util_1.runAsyncTask(progressMsg, function () {
-                progressMsg = Msg + ' - Exploring Neighborhood..';
-                //this.exploreNeighborhood(1);
-                console.timeEnd("ANN");
-                return _this.knns;
+                console.time("RP");
+                console.time("ANN");
+                _this.trees(50, 50);
+            }).then(function () {
+                progressMsg = Msg + ' - Reducing Neighbors..';
+                util_1.runAsyncTask(progressMsg, function () {
+                    _this.reduce();
+                    console.timeEnd("RP");
+                }).then(function () {
+                    progressMsg = Msg + ' - Exploring Neighborhood..';
+                    util_1.runAsyncTask(progressMsg, function () {
+                        _this.exploreNeighborhood(1);
+                        console.timeEnd("ANN");
+                        resolve(_this.knns);
+                    });
+                });
             });
         });
     };

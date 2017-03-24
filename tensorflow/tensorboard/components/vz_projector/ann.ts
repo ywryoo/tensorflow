@@ -33,7 +33,7 @@ export class Position {
 	}
 	public advance(): number {
 		this.first = this.first + 1;
-		return (this.first >= this.knn[this.i].length-1) ? -1 : this.knn[this.i][this.first].index;
+		return (this.first >= this.knn[this.i].length) ? -1 : this.knn[this.i][this.first].index;
 	}
 	public get(): number {
 		return this.knn[this.i][this.first].index;
@@ -73,17 +73,18 @@ export class MinIndexedPQ {
 	}
 
 	private bubbleDown(k:number): void {
-		while(2*k <= this.N) {
-			let j = 2*k;
+		let kk = k;
+		while(2*kk <= this.N) {
+			let j = 2*kk;
 			if(j < this.N && this.keys[this.heap[j]] > this.keys[this.heap[j+1]]) j++;
-			if(this.keys[this.heap[k]] <= this.keys[this.heap[j]]) break;
-			this.swap(k, j);
-			k = j;
+			if(this.keys[this.heap[kk]] <= this.keys[this.heap[j]]) break;
+			this.swap(kk, j);
+			kk = j;
 		}
 	}
 
 	public isEmpty(): boolean {
-		return this.N == 0;
+		return this.N === 0;
 	}
 
 	public insert(i:number, key:number): void {
@@ -104,8 +105,8 @@ export class MinIndexedPQ {
 
 	public pop(): number {
 		let min = this.heap[1];
-		this.N = this.N - 1;
 		this.swap(1, this.N);
+		this.N = this.N - 1;
 		this.bubbleDown(1);
 		this.index[min] = -1;
 		this.heap[this.N+1] = -1;
@@ -288,36 +289,40 @@ export class ANN {
 	}
 
 	public exploreNeighborhood(maxIter: number): void {
-	let old_knns: NearestEntry[][];
-	for(let T = 0; T < maxIter; ++T) {
-		old_knns = this.knns;
-		let nodeHeap = new KMin<NearestEntry>(this.K);
-		let positionHeap: MinIndexedPQ = new MinIndexedPQ(this.K + 1);
-		let positionVector:Position[] = [];
-		for(let i = 0; i < this.N; ++i) {
-			const x_i = this.data[i].vector;
-			positionVector.push(new Position(old_knns, i));
-			positionHeap.insert(0, old_knns[i][0].index);
-			let posVecCnt: number = 1;
-			let oldEnd = old_knns[i].length;
-			for(let it = 0; it < oldEnd; it++) {
-				positionVector.push(new Position(old_knns, old_knns[i][it].index));
-				let id: number = old_knns[i][positionVector[positionVector.length-1].first].index;
-				positionHeap.insert(posVecCnt, id);
-				posVecCnt = posVecCnt + 1;
-			}
-			let lastOne = -1;
-			while(!positionHeap.isEmpty()) {
-				let nextOne = positionHeap.minKey();
-				if(nextOne != lastOne && nextOne != i) {
-					const d = vector.dist2(x_i, this.data[nextOne].vector);
-					nodeHeap.add(d, {index: nextOne, dist: d});
-					lastOne = nextOne;
+		let old_knns: NearestEntry[][];
+		for(let T = 0; T < maxIter; T++) {
+			old_knns = this.knns.slice();
+			for(let i = 0; i < this.N; i++) {
+				if(old_knns[i].length !== 0) {
+					let nodeHeap = new KMin<NearestEntry>(this.K);
+					let positionHeap: MinIndexedPQ = new MinIndexedPQ(this.K + 1);
+					let positionVector:Position[] = [];
+					const x_i = this.data[i].vector;
+					positionVector.push(new Position(old_knns, i));
+					positionHeap.insert(0, old_knns[i][0].index);
+					let posVecCnt: number = 1;
+					let oldEnd = old_knns[i].length;
+					for(let it = 0; it < oldEnd; it++) {
+						positionVector.push(new Position(old_knns, old_knns[i][it].index));
+						let id: number = positionVector[positionVector.length-1].get();
+						positionHeap.insert(posVecCnt, id);
+						posVecCnt = posVecCnt + 1;
+					}
+					let lastOne = -1;
+					while(!positionHeap.isEmpty()) {
+						let nextOne = positionHeap.minKey();
+						if(nextOne !== lastOne && nextOne !== i) {
+
+							const d = vector.dist2(x_i, this.data[nextOne].vector);
+							nodeHeap.add(d, {index: nextOne, dist: d});
+							lastOne = nextOne;
+
+						}
+						this.advanceHeap(positionHeap, positionVector);
+					}
+					this.knns[i] = nodeHeap.getMinKItems();
 
 				}
-				this.advanceHeap(positionHeap, positionVector);
-			}
-			this.knns[i] = nodeHeap.getMinKItems();
 			}
 		}
 
@@ -326,17 +331,11 @@ export class ANN {
 	private advanceHeap(positionHeap: MinIndexedPQ, positionVector: Position[]): void {
 		let whichColumn = positionHeap.minIndex();
 		let adv = positionVector[whichColumn].advance();
-		if(adv == -1) {
+		if(adv === -1) {
 			positionHeap.pop();
 		} else {
 			positionHeap.rotate(adv);
 		}
-
-	}
-
-	private addHeap(heap: NearestEntry[], x_i: Float32Array, j: number): void {
-
-		let d = vector.dist2(x_i, this.data[j].vector);
 
 	}
 
@@ -354,28 +353,27 @@ export class ANN {
 
 	public run(): Promise<NearestEntry[][]> {
 		const Msg = 'Finding nearest neighbors';
-		let progressMsg = Msg + ' - Building trees..';
-		return runAsyncTask<void>(progressMsg, () => {
-			console.time("RP");
-			console.time("ANN");
-			this.trees(50, 50);
-			return;
-		}).then(() => {
-			progressMsg = Msg + ' - Reducing Neighbors..';
-			runAsyncTask<void>(progressMsg, () => {
-				this.reduce();
-				console.timeEnd("RP"); 
-				return;
+		return new Promise<NearestEntry[][]>((resolve) => {
+			let progressMsg = Msg + ' - Building trees..';
+			runAsyncTask(progressMsg, () => {
+				console.time("RP");
+				console.time("ANN");
+				this.trees(50, 50);
+			}).then(() => {
+				progressMsg = Msg + ' - Reducing Neighbors..';
+				runAsyncTask(progressMsg, () => {
+					this.reduce();
+					console.timeEnd("RP"); 
+				}).then(() => {
+					progressMsg = Msg + ' - Exploring Neighborhood..';
+					runAsyncTask(progressMsg, () => {
+						this.exploreNeighborhood(1);
+						console.timeEnd("ANN"); 
+						resolve(this.knns);
+					});
+				})
 			})
-		}).then(() => {
-			return runAsyncTask<NearestEntry[][]>(progressMsg, () => {
-				progressMsg = Msg + ' - Exploring Neighborhood..';
-				//this.exploreNeighborhood(1);
-				console.timeEnd("ANN"); 
-				return this.knns;
-			});
 		})
-
 	}
 
 }
